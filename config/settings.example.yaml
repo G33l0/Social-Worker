@@ -1,0 +1,134 @@
+# Example settings for Social Worker.
+# Copy to config/settings.yaml and edit for your authorized target.
+website:
+  url: http://127.0.0.1:8099
+  environment: local
+  authorized_test_mode: false
+  authorization_reference: ''
+  operator_contact: operator@example.com
+  identify_as: SocialWorker-LoadTest
+  verify_tls: true
+  adapter: generic
+browser:
+  engine: chromium
+  headless: true
+  viewport_width: 1366
+  viewport_height: 768
+  default_timeout_ms: 30000
+  navigation_timeout_ms: 45000
+  slow_mo_ms: 0
+  screenshot_on_failure: true
+  save_html_on_failure: true
+  capture_console: true
+  capture_network: true
+  ignore_https_errors: false
+  executable_path: ''
+  launch_args: []
+  human_typing: true
+  typing_delay_min_ms: 5
+  typing_delay_max_ms: 25
+  max_browsers: 8
+  contexts_per_browser: 8
+concurrency:
+  max_global_workers: 50
+  default_max_workers_per_location: 20
+  max_concurrent_sessions_per_worker: 1
+  ramp_up_seconds: 30.0
+  ramp_down_seconds: 5.0
+  max_requests_per_minute: 600
+  max_sessions_per_hour: 500
+  max_sessions_per_day: 5000
+posting:
+  enabled: true
+  min_interval_seconds: 900.0
+  max_interval_seconds: 2700.0
+  max_posts_per_session: 5
+  max_posts_per_day: 50
+  probability: 0.8
+  randomized_delay: true
+  content_selection_mode: RANDOM_WITHOUT_REPETITION
+  forum_selection_mode: WEIGHTED_FORUM_SELECTION
+  categories: []
+replies:
+  enabled: true
+  min_interval_seconds: 600.0
+  max_interval_seconds: 1800.0
+  max_replies_per_session: 10
+  max_replies_per_day: 100
+  probability: 0.65
+  target_selection_mode: RANDOM_INITIAL_POST
+  target_filter_keywords: []
+  specific_post_id: ''
+  content_selection_mode: RANDOM_WITHOUT_REPETITION
+  categories: []
+session:
+  default_scenario: scenario_06
+  min_duration_seconds: 60.0
+  max_duration_seconds: 900.0
+  min_think_time_seconds: 2.0
+  max_think_time_seconds: 12.0
+  browse_pages_min: 1
+  browse_pages_max: 4
+  sessions_per_worker: 1
+  loop_forever: false
+  reuse_identity_across_sessions: false
+forums:
+  mode: WEIGHTED_FORUM_SELECTION
+  specific_forum: ''
+  weights:
+    general: 40.0
+    confessions: 20.0
+    questions: 15.0
+    random: 25.0
+  allowed_forums: []
+  rotation_order: []
+content:
+  posts_path: data/content/posts.txt
+  replies_path: data/content/replies.txt
+  prevent_duplicates_per_worker: true
+  prevent_global_duplicates: false
+  reload_on_start: true
+  max_library_size: 10000
+safety:
+  respect_rate_limits: true
+  backoff_initial_seconds: 30.0
+  backoff_max_seconds: 600.0
+  backoff_multiplier: 2.0
+  rate_limit_status_codes:
+  - 429
+  - 503
+  max_consecutive_worker_errors: 5
+  abort_on_error_rate: 0.5
+  abort_error_rate_min_samples: 20
+  stop_on_rate_limit_streak: 10
+  honour_robots_txt: true
+database:
+  url: sqlite:///data/social_worker.db
+  echo: false
+  pool_size: 10
+  max_overflow: 20
+logging:
+  level: INFO
+  directory: logs
+  console: true
+  console_level: WARNING
+  max_bytes: 10485760
+  backups: 5
+reporting:
+  output_directory: data/reports
+  debug_directory: data/debug
+  screenshot_directory: data/screenshots
+  formats:
+  - json
+  - csv
+  - html
+  auto_export_on_stop: true
+controller:
+  api_enabled: false
+  host: 127.0.0.1
+  port: 8800
+  heartbeat_interval_seconds: 10.0
+  heartbeat_timeout_seconds: 45.0
+  redis_url: ''
+  api_token: ''
+dry_run: false
