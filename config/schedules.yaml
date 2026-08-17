@@ -1,0 +1,41 @@
+schedules:
+- name: always
+  timezone: UTC
+  days:
+  - mon
+  - tue
+  - wed
+  - thu
+  - fri
+  - sat
+  - sun
+  windows:
+  - start: 00:00
+    end: '23:59'
+  enabled: true
+- name: business_hours
+  timezone: UTC
+  days:
+  - mon
+  - tue
+  - wed
+  - thu
+  - fri
+  windows:
+  - start: 08:00
+    end: '18:00'
+  enabled: true
+- name: off_peak
+  timezone: UTC
+  days:
+  - mon
+  - tue
+  - wed
+  - thu
+  - fri
+  - sat
+  - sun
+  windows:
+  - start: '22:00'
+    end: 04:00
+  enabled: true

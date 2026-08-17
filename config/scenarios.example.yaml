@@ -1,0 +1,580 @@
+# Example scenarios for Social Worker.
+# Copy to config/scenarios.yaml and edit for your authorized target.
+scenarios:
+- name: scenario_01
+  description: Visit only - open the site and leave.
+  steps:
+  - action: OPEN_SITE
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: WAIT_FOR_LOAD
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: THINK
+    repeat: 1
+    probability: 1.0
+    min_seconds: 2.0
+    max_seconds: 6.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: END_SESSION
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  allow_posting: false
+  allow_replying: false
+  loop: false
+  max_duration_seconds: 0.0
+- name: scenario_02
+  description: Visit and select the site-provided identity.
+  steps:
+  - action: OPEN_SITE
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: WAIT_FOR_LOAD
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: SELECT_AVATAR
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: SELECT_USERNAME
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: THINK
+    repeat: 1
+    probability: 1.0
+    min_seconds: 2.0
+    max_seconds: 8.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: END_SESSION
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  allow_posting: false
+  allow_replying: false
+  loop: false
+  max_duration_seconds: 0.0
+- name: scenario_03
+  description: Visit, take an identity and browse a forum.
+  steps:
+  - action: OPEN_SITE
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: WAIT_FOR_LOAD
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: SELECT_AVATAR
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: SELECT_USERNAME
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: ENTER_FORUM
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: BROWSE_FORUM
+    repeat: 2
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: THINK
+    repeat: 1
+    probability: 1.0
+    min_seconds: 3.0
+    max_seconds: 10.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: END_SESSION
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  allow_posting: false
+  allow_replying: false
+  loop: false
+  max_duration_seconds: 0.0
+- name: scenario_04
+  description: Visit and create a post.
+  steps:
+  - action: OPEN_SITE
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: WAIT_FOR_LOAD
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: SELECT_AVATAR
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: SELECT_USERNAME
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: ENTER_FORUM
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: BROWSE_FORUM
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: THINK
+    repeat: 1
+    probability: 1.0
+    min_seconds: 3.0
+    max_seconds: 9.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: CREATE_POST
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: END_SESSION
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  allow_posting: true
+  allow_replying: false
+  loop: false
+  max_duration_seconds: 0.0
+- name: scenario_05
+  description: Visit and reply to an existing initial post.
+  steps:
+  - action: OPEN_SITE
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: WAIT_FOR_LOAD
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: SELECT_AVATAR
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: SELECT_USERNAME
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: ENTER_FORUM
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: BROWSE_FORUM
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: READ_POST
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: THINK
+    repeat: 1
+    probability: 1.0
+    min_seconds: 4.0
+    max_seconds: 12.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: CREATE_REPLY
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: END_SESSION
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  allow_posting: false
+  allow_replying: true
+  loop: false
+  max_duration_seconds: 0.0
+- name: scenario_06
+  description: Full session - browse, post, read and reply.
+  steps:
+  - action: OPEN_SITE
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: WAIT_FOR_LOAD
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: SELECT_AVATAR
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: SELECT_USERNAME
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: ENTER_FORUM
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: BROWSE_FORUM
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: THINK
+    repeat: 1
+    probability: 1.0
+    min_seconds: 3.0
+    max_seconds: 10.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: CREATE_POST
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: THINK
+    repeat: 1
+    probability: 1.0
+    min_seconds: 3.0
+    max_seconds: 10.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: READ_POST
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: CREATE_REPLY
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: THINK
+    repeat: 1
+    probability: 1.0
+    min_seconds: 2.0
+    max_seconds: 8.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: SWITCH_FORUM
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: BROWSE_FORUM
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: END_SESSION
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  allow_posting: true
+  allow_replying: true
+  loop: false
+  max_duration_seconds: 0.0
+- name: scenario_07
+  description: Heavy forum activity - multiple posts and replies.
+  steps:
+  - action: OPEN_SITE
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: WAIT_FOR_LOAD
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: SELECT_AVATAR
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: SELECT_USERNAME
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: ENTER_FORUM
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: BROWSE_FORUM
+    repeat: 2
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: CREATE_POST
+    repeat: 2
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: READ_POST
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: CREATE_REPLY
+    repeat: 3
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: SWITCH_FORUM
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: BROWSE_FORUM
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: CREATE_POST
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: CREATE_REPLY
+    repeat: 2
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  - action: END_SESSION
+    repeat: 1
+    probability: 1.0
+    min_seconds: 0.0
+    max_seconds: 0.0
+    forum: ''
+    category: ''
+    note: ''
+  allow_posting: true
+  allow_replying: true
+  loop: false
+  max_duration_seconds: 0.0

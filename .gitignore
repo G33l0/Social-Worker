@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# Social Worker runtime output
+logs/
+data/*.db
+data/*.db-wal
+data/*.db-shm
+data/reports/
+data/debug/
+data/screenshots/
+data/sessions/
+data/backups/
+
+# Local environment
+.env

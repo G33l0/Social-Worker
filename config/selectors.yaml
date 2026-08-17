@@ -1,0 +1,98 @@
+selectors:
+  site: generic
+  identity:
+    avatar_options:
+    - '[data-testid=''avatar-option'']'
+    - .avatar-option
+    - button.avatar
+    - img.avatar-choice
+    avatar_label_attribute: data-avatar
+    avatar_selected:
+    - '[data-testid=''avatar-option''].selected'
+    - .avatar-option.selected
+    username_options:
+    - '[data-testid=''username-option'']'
+    - .username-option
+    - select[name='username'] option
+    username_label_attribute: data-username
+    username_selected:
+    - '[data-testid=''username-option''].selected'
+    - .username-option.selected
+    username_refresh:
+    - '[data-testid=''username-refresh'']'
+    - '#refresh-usernames'
+    enter_button:
+    - '[data-testid=''enter-site'']'
+    - '#enter'
+    - button[type='submit']
+    identity_banner:
+    - '[data-testid=''current-identity'']'
+    - .current-identity
+  forums:
+    forum_links:
+    - '[data-testid=''forum-link'']'
+    - a.forum-link
+    - nav.forums a
+    forum_key_attribute: data-forum
+    forum_name:
+    - '[data-testid=''forum-name'']'
+    - .forum-name
+    forum_heading:
+    - '[data-testid=''forum-heading'']'
+    - h1.forum-title
+    forum_ready:
+    - '[data-testid=''post-list'']'
+    - .post-list
+  posts:
+    post_items:
+    - '[data-testid=''post-item'']'
+    - article.post
+    - li.post
+    post_id_attribute: data-post-id
+    post_link:
+    - '[data-testid=''post-link'']'
+    - a.post-link
+    post_title:
+    - '[data-testid=''post-title'']'
+    - .post-title
+    - h2
+    post_body:
+    - '[data-testid=''post-body'']'
+    - .post-body
+    post_timestamp_attribute: data-created-at
+    new_post_input:
+    - '[data-testid=''new-post-body'']'
+    - textarea[name='body']
+    - '#new-post'
+    new_post_title_input:
+    - '[data-testid=''new-post-title'']'
+    - input[name='title']
+    new_post_submit:
+    - '[data-testid=''new-post-submit'']'
+    - button#create-post
+    - form.new-post button[type='submit']
+    post_success_flag:
+    - '[data-testid=''post-created'']'
+    - .flash-success
+  replies:
+    reply_items:
+    - '[data-testid=''reply-item'']'
+    - .reply-item
+    reply_input:
+    - '[data-testid=''reply-body'']'
+    - textarea[name='reply']
+    - '#reply-body'
+    reply_submit:
+    - '[data-testid=''reply-submit'']'
+    - button#create-reply
+    - form.reply-form button[type='submit']
+    reply_success_flag:
+    - '[data-testid=''reply-created'']'
+    - .flash-success
+  rate_limit:
+    rate_limited_banner:
+    - '[data-testid=''rate-limited'']'
+    - .rate-limit-notice
+    error_banner:
+    - '[data-testid=''error'']'
+    - .error-banner

@@ -1,0 +1,3 @@
+# Example workers for Social Worker.
+# Copy to config/workers.yaml and edit for your authorized target.
+workers: []
