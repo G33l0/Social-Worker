@@ -115,6 +115,7 @@ class MetricsManager:
         self._errors: list[dict[str, Any]] = []
         self._lock = asyncio.Lock()
         self._flusher: asyncio.Task[None] | None = None
+        self._pending_flushes: set[asyncio.Task[int]] = set()
         self._running = False
 
     # -------------------------------------------------------------- lifecycle
@@ -136,6 +137,8 @@ class MetricsManager:
             except asyncio.CancelledError:
                 pass
             self._flusher = None
+        if self._pending_flushes:
+            await asyncio.gather(*list(self._pending_flushes), return_exceptions=True)
         await self.flush()
         LOGGER.info("Metrics manager stopped for %s", self.test_run_id)
 
@@ -288,10 +291,21 @@ class MetricsManager:
 
     # ------------------------------------------------------------------ flush
     def _maybe_flush(self) -> None:
+        """Trigger an out-of-band flush when the buffer grows past its limit.
+
+        The task is kept in a set until it finishes: an un-referenced task can
+        be garbage-collected mid-flight, which would silently drop telemetry.
+        """
         pending = (len(self._events) + len(self._metrics) + len(self._executions)
                    + len(self._errors))
-        if pending >= self.buffer_limit and self._running:
-            asyncio.create_task(self.flush())
+        if pending < self.buffer_limit or not self._running:
+            return
+        try:
+            task = asyncio.get_running_loop().create_task(self.flush())
+        except RuntimeError:  # no running loop (synchronous caller)
+            return
+        self._pending_flushes.add(task)
+        task.add_done_callback(self._pending_flushes.discard)
 
     async def flush(self) -> int:
         """Write buffered telemetry to the database; returns rows written."""

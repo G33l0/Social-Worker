@@ -23,6 +23,7 @@ from app.database.database import get_database
 from app.database.migrations import upgrade
 from app.database.repository import Repository
 from app.locations.location_manager import LocationManager
+from app.reporting.comparison import compare
 from app.reporting.report_manager import REPORT_CATEGORIES, ReportManager
 from app.scheduler.scenarios import ScenarioLibrary
 from app.utils.config import (
@@ -140,9 +141,13 @@ class ConsoleApp:
         }
         handler = handlers[option]
         try:
-            result = handler()
-            if asyncio.iscoroutine(result):
-                await result
+            if asyncio.iscoroutinefunction(handler):
+                await handler()
+            else:
+                # Synchronous handlers block on input(); run them on a worker
+                # thread so a live test run keeps dispatching, flushing metrics
+                # and answering the heartbeat while a wizard is open.
+                await asyncio.to_thread(handler)
         except (ValidationError, ValueError, KeyError) as exc:
             console.error(str(exc))
             await self._to_thread(console.pause)
@@ -427,7 +432,46 @@ class ConsoleApp:
             safety.max_consecutive_worker_errors, minimum=1)
         console.info("Rate-limit responses (HTTP 429) are always respected: workers "
                      "back off and the run stops if throttling persists.")
+
+        if console.ask_bool("Configure acceptance thresholds (pass/fail criteria)?",
+                            True):
+            self._configure_thresholds()
         self._save_settings()
+
+    def _configure_thresholds(self) -> None:
+        """Acceptance criteria that turn a run into a PASS/FAIL verdict."""
+        console.section("ACCEPTANCE THRESHOLDS")
+        thresholds = self.settings.thresholds
+        print(console.keyvalues({
+            "Enabled": thresholds.enabled,
+            "Max error rate": f"{thresholds.max_error_rate:.1%}",
+            "Max p95 response": f"{thresholds.max_p95_response_ms:g} ms",
+            "Max p99 response": f"{thresholds.max_p99_response_ms:g} ms",
+            "Max rate-limit events": thresholds.max_rate_limit_events,
+            "Max failed sessions": thresholds.max_failed_sessions,
+        }))
+        console.info("A limit of 0 disables that check.")
+        thresholds.enabled = console.ask_bool("Evaluate acceptance thresholds",
+                                              thresholds.enabled)
+        if not thresholds.enabled:
+            return
+        thresholds.max_error_rate = console.ask_float(
+            "Maximum error rate (0-1)", thresholds.max_error_rate,
+            minimum=0.0, maximum=1.0)
+        thresholds.max_p95_response_ms = console.ask_float(
+            "Maximum p95 response time (ms)", thresholds.max_p95_response_ms, minimum=0)
+        thresholds.max_p99_response_ms = console.ask_float(
+            "Maximum p99 response time (ms)", thresholds.max_p99_response_ms, minimum=0)
+        thresholds.max_avg_response_ms = console.ask_float(
+            "Maximum average response time (ms, 0 = off)",
+            thresholds.max_avg_response_ms, minimum=0)
+        thresholds.max_rate_limit_events = console.ask_int(
+            "Maximum rate-limit events", thresholds.max_rate_limit_events, minimum=0)
+        thresholds.max_failed_sessions = console.ask_int(
+            "Maximum failed sessions", thresholds.max_failed_sessions, minimum=0)
+        thresholds.min_completed_sessions = console.ask_int(
+            "Minimum completed sessions (0 = off)",
+            thresholds.min_completed_sessions, minimum=0)
 
     # ------------------------------------------------------- 11/12 test modes
     async def _test_single_worker(self) -> None:
@@ -561,9 +605,16 @@ class ConsoleApp:
         if self.controller is None:
             console.warn("No test run to monitor. Start a load test first.")
             return
-        await live_monitor(self.controller.status, interval=1.0)
-        print(render(self.controller.status()))
-        await self._to_thread(console.pause)
+        stop = asyncio.Event()
+        refresher = asyncio.create_task(
+            live_monitor(self.controller.status, interval=1.0, stop_event=stop),
+            name="live-monitor")
+        # Leaving on Enter rather than Ctrl+C: Ctrl+C would tear down the whole
+        # console (and the running test) instead of returning to the menu.
+        await self._to_thread(input, "")
+        stop.set()
+        await refresher
+        console.info("Left the live monitor. The test run continues.")
 
     # ------------------------------------------------------------- 18 reports
     def _view_reports(self) -> None:
@@ -581,8 +632,36 @@ class ConsoleApp:
         run_id = console.ask("Test run id (blank = latest)", runs[0]["test_run_id"])
         manager = ReportManager(database,
                                 output_directory=self.settings.reporting.output_directory)
-        category = console.choose("Report:", list(REPORT_CATEGORIES) + ["all files"],
-                                  default=1)
+        category = console.choose(
+            "Report:", list(REPORT_CATEGORIES) + ["acceptance verdict",
+                                                  "compare with another run",
+                                                  "all files"], default=1)
+        if category == "acceptance verdict":
+            from app.core.thresholds import evaluate
+
+            verdict = evaluate(repository, run_id, self.settings.thresholds)
+            console.section(f"ACCEPTANCE VERDICT - {run_id}")
+            print(console.table([check.to_row() for check in verdict.checks],
+                                columns=["check", "result", "observed", "limit",
+                                         "unit", "detail"]))
+            print()
+            (console.success if verdict.passed else console.error)(
+                verdict.summary_line())
+            console.pause()
+            return
+        if category == "compare with another run":
+            baseline = console.ask("Baseline test run id",
+                                   runs[1]["test_run_id"] if len(runs) > 1 else "",
+                                   required=True)
+            tolerance = console.ask_float("Regression tolerance (0-1)", 0.10,
+                                          minimum=0.0, maximum=1.0)
+            result = compare(repository, baseline, run_id, tolerance=tolerance)
+            console.section(f"{baseline} -> {run_id}")
+            print(console.table([metric.to_row() for metric in result.metrics]))
+            print()
+            (console.success if result.passed else console.error)(result.summary_line())
+            console.pause()
+            return
         if category == "all files":
             files = manager.list_reports(run_id)
             print(console.table([{"file": path.name,
@@ -693,11 +772,18 @@ class ConsoleApp:
 
     # ---------------------------------------------------------------- helpers
     def _new_controller(self) -> Controller:
-        """Persist the current configuration and build a fresh controller."""
+        """Persist the current configuration and build a fresh controller.
+
+        The controller reloads everything from disk, so unsaved edits made in
+        the wizards (content items in particular) are written out first -
+        otherwise they would silently not take part in the run.
+        """
         self._save_settings(quiet=True)
         self.locations.save(self.paths.locations)
         self.locations.save_schedules(self.paths.schedules)
         self.workers.save(self.paths.workers)
+        if len(self.content.post_library) or len(self.content.reply_library):
+            self.content.save()
         return Controller(load_settings(self.paths.settings), config_paths=self.paths)
 
     def _save_settings(self, *, quiet: bool = False) -> None:
@@ -721,10 +807,12 @@ class ConsoleApp:
 
     def _print_run_summary(self, status: dict[str, Any]) -> None:
         stats = status.get("global", {})
+        verdict = status.get("verdict") or {}
         console.section("RUN SUMMARY")
         print(console.keyvalues({
             "Test run": status.get("test_run_id", "-"),
             "State": status.get("state", "-"),
+            "Verdict": verdict.get("verdict", "-"),
             "Sessions completed": stats.get("completed", 0),
             "Sessions failed": stats.get("failed", 0),
             "Posts": stats.get("posts", 0),
@@ -732,6 +820,15 @@ class ConsoleApp:
             "Errors": stats.get("errors", 0),
             "Average response": f"{stats.get('avg_response_ms', 0)} ms",
         }))
+        if verdict.get("checks"):
+            console.section("ACCEPTANCE CHECKS")
+            print(console.table(verdict["checks"],
+                                columns=["check", "result", "observed", "limit",
+                                         "unit", "detail"]))
+            if verdict.get("failed_checks"):
+                console.error("Breached: " + ", ".join(verdict["failed_checks"]))
+            else:
+                console.success("Every acceptance check was met.")
         locations = status.get("locations", [])
         if locations:
             print()

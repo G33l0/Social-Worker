@@ -171,6 +171,7 @@ class ReplyConfig(Base):
     max_replies_per_session: int = Field(10, ge=0, le=1_000)
     max_replies_per_day: int = Field(100, ge=0, le=100_000)
     probability: float = Field(0.65, ge=0.0, le=1.0)
+    randomized_delay: bool = True
     target_selection_mode: ReplyTargetMode = ReplyTargetMode.RANDOM
     target_filter_keywords: list[str] = Field(default_factory=list)
     specific_post_id: str = ""
@@ -196,7 +197,6 @@ class SessionConfig(Base):
     browse_pages_max: int = Field(4, ge=0, le=100)
     sessions_per_worker: int = Field(1, ge=1, le=10_000)
     loop_forever: bool = False
-    reuse_identity_across_sessions: bool = False
 
     @model_validator(mode="after")
     def _check_bounds(self) -> "SessionConfig":
@@ -260,6 +260,27 @@ class SafetyConfig(Base):
     honour_robots_txt: bool = True
 
 
+class ThresholdConfig(Base):
+    """Pass/fail criteria evaluated against a finished run.
+
+    A load test without acceptance criteria only produces numbers; these turn a
+    run into a verdict the operator can gate a release on.  A threshold of 0
+    disables that particular check.
+    """
+
+    enabled: bool = True
+    max_error_rate: float = Field(0.02, ge=0.0, le=1.0)
+    max_avg_response_ms: float = Field(0.0, ge=0.0)
+    max_p95_response_ms: float = Field(2_000.0, ge=0.0)
+    max_p99_response_ms: float = Field(5_000.0, ge=0.0)
+    max_post_submit_p95_ms: float = Field(0.0, ge=0.0)
+    max_reply_submit_p95_ms: float = Field(0.0, ge=0.0)
+    min_completed_sessions: int = Field(0, ge=0)
+    max_rate_limit_events: int = Field(0, ge=0)
+    max_failed_sessions: int = Field(0, ge=0)
+    fail_on_javascript_errors: bool = False
+
+
 class DatabaseConfig(Base):
     """Persistence settings.  SQLite by default; PostgreSQL for production."""
 
@@ -317,6 +338,7 @@ class Settings(Base):
     forums: ForumConfig = Field(default_factory=ForumConfig)
     content: ContentConfig = Field(default_factory=ContentConfig)
     safety: SafetyConfig = Field(default_factory=SafetyConfig)
+    thresholds: ThresholdConfig = Field(default_factory=ThresholdConfig)
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     reporting: ReportingConfig = Field(default_factory=ReportingConfig)
@@ -360,9 +382,42 @@ def _jsonable(model: BaseModel) -> dict[str, Any]:
     return model.model_dump(mode="json")
 
 
+#: Keys removed in later versions, dropped on load instead of failing the run.
+DEPRECATED_KEYS: dict[str, tuple[str, ...]] = {
+    "session": ("reuse_identity_across_sessions",),
+}
+
+
+def _drop_deprecated(document: dict[str, Any]) -> list[str]:
+    """Remove retired keys from a loaded document; returns what was dropped."""
+    dropped: list[str] = []
+    for section, keys in DEPRECATED_KEYS.items():
+        block = document.get(section)
+        if not isinstance(block, dict):
+            continue
+        for key in keys:
+            if key in block:
+                block.pop(key)
+                dropped.append(f"{section}.{key}")
+    return dropped
+
+
 def load_settings(path: str | Path = CONFIG_DIR / "settings.yaml") -> Settings:
-    """Load and validate ``settings.yaml`` (returns defaults when absent)."""
-    return Settings.model_validate(_read_yaml(Path(path)))
+    """Load and validate ``settings.yaml`` (returns defaults when absent).
+
+    Keys retired in a newer version are dropped with a warning rather than
+    failing the load, so an existing configuration keeps working after an
+    upgrade.
+    """
+    document = _read_yaml(Path(path))
+    dropped = _drop_deprecated(document)
+    if dropped:
+        import logging
+
+        logging.getLogger("social_worker.config").warning(
+            "Ignoring setting(s) removed in this version: %s. Re-save the "
+            "configuration to tidy the file.", ", ".join(dropped))
+    return Settings.model_validate(document)
 
 
 def save_settings(settings: Settings,

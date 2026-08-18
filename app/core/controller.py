@@ -25,6 +25,7 @@ from app.core.content_manager import ContentManager
 from app.core.forum_manager import ForumSelector
 from app.core.metrics_manager import MetricsManager
 from app.core.session_manager import SessionManager
+from app.core.thresholds import Verdict, evaluate as evaluate_thresholds
 from app.core.worker_manager import WorkerManager
 from app.database.database import Database, get_database
 from app.database.migrations import upgrade
@@ -33,6 +34,7 @@ from app.database.models import Location as LocationRow
 from app.database.models import TestRun
 from app.locations.allocation import RateLimiter
 from app.locations.location_manager import LocationManager
+from app.database.repository import Repository
 from app.reporting.report_manager import ReportManager
 from app.scheduler.jobs import Job, build_job
 from app.scheduler.scenarios import ScenarioLibrary
@@ -40,6 +42,7 @@ from app.scheduler.scheduler import SchedulerState, SessionScheduler
 from app.utils.config import ConfigPaths, Settings, load_settings
 from app.utils.ids import new_test_run_id
 from app.utils.logger import configure_logging, get_logger
+from app.utils import robots
 from app.utils.time_utils import date_slug, utc_now
 from app.workers.heartbeat import HeartbeatMonitor
 from app.workers.worker import AdapterFactory, Worker
@@ -116,6 +119,10 @@ class Controller:
         self._started_at = None
         self._plan: list[WorkerProfile] = []
         self._dry_run_findings: list[dict[str, Any]] = []
+        self._finalised = False
+        self._finalise_lock = asyncio.Lock()
+        self.verdict: Verdict | None = None
+        self.robots_verdict: robots.RobotsVerdict | None = None
 
     # ------------------------------------------------------------- validation
     def preflight(self, *, dry_run: bool = False) -> list[str]:
@@ -141,7 +148,23 @@ class Controller:
         if not self.locations.enabled():
             problems.append("No enabled geographic test locations")
 
+        problems.extend(self.check_robots())
         return problems
+
+    def check_robots(self) -> list[str]:
+        """Honour the target's robots.txt when the safety setting asks us to."""
+        if not self.settings.safety.honour_robots_txt:
+            return []
+        verdict = robots.check(self.settings.website.url,
+                               user_agent=self.settings.website.identify_as)
+        self.robots_verdict = verdict
+        if verdict.checked and not verdict.allowed:
+            return [verdict.as_problem()]
+        if verdict.checked and verdict.crawl_delay:
+            LOGGER.warning("robots.txt advertises a crawl delay of %.1fs; consider "
+                           "lowering concurrency.max_requests_per_minute",
+                           verdict.crawl_delay)
+        return []
 
     # -------------------------------------------------------------- test runs
     def _next_test_run_id(self) -> str:
@@ -172,6 +195,8 @@ class Controller:
         for problem in problems:
             LOGGER.warning("Preflight (forced past): %s", problem)
 
+        self.locations.apply_default_ceiling(
+            self.settings.concurrency.default_max_workers_per_location)
         self.test_run_id = self._next_test_run_id()
         self.metrics = MetricsManager(self.database, self.test_run_id)
         self.sessions = SessionManager(self.database, self.test_run_id)
@@ -406,12 +431,28 @@ class Controller:
         await self._set_run_status("RUNNING")
 
     async def stop(self) -> dict[str, Any]:
-        """Graceful stop: no new sessions, in-flight sessions finish."""
+        """Graceful stop: no new sessions, in-flight sessions finish.
+
+        In-flight sessions are given ``concurrency.ramp_down_seconds`` to finish
+        on their own; anything still running after that is stopped the hard way
+        so the console never hangs on a wedged session.
+        """
         if self.scheduler is None:
             return self.status()
         self.state = ControllerState.STOPPING
         self.scheduler.stop()
         self._pause_event.set()
+
+        grace = self.settings.concurrency.ramp_down_seconds
+        if grace > 0 and self._run_task is not None and not self._run_task.done():
+            try:
+                await asyncio.wait_for(asyncio.shield(self._run_task), timeout=grace)
+            except asyncio.TimeoutError:
+                LOGGER.warning("Sessions still running after the %.0fs ramp-down "
+                               "window; stopping them now", grace)
+                return await self.stop_all(reason="ramp-down expired")
+            except asyncio.CancelledError:  # pragma: no cover - shutdown path
+                pass
         await self.wait()
         return self.status()
 
@@ -457,9 +498,20 @@ class Controller:
 
     # ------------------------------------------------------------- finalising
     async def _finalise(self) -> None:
-        """Flush telemetry, persist final counters and export reports."""
-        if self.state in {ControllerState.COMPLETED, ControllerState.IDLE}:
-            return
+        """Flush telemetry, persist final counters and export reports.
+
+        Both the run task and an operator stop can reach this, so it is
+        guarded: finalising twice would double-export reports and re-stamp the
+        run's end time.
+        """
+        async with self._finalise_lock:
+            if self._finalised or self.state in {ControllerState.COMPLETED,
+                                                 ControllerState.IDLE}:
+                return
+            self._finalised = True
+            await self._finalise_locked()
+
+    async def _finalise_locked(self) -> None:
         if self.metrics is not None:
             await self.metrics.flush()
         if self.pool is not None:
@@ -477,6 +529,9 @@ class Controller:
         self.state = (ControllerState.STOPPED if status == "STOPPED"
                       else ControllerState.COMPLETED)
 
+        self.verdict = self.evaluate_thresholds()
+        self.reports.verdict = self.verdict
+
         if self.settings.reporting.auto_export_on_stop:
             try:
                 exported = self.reports.export_all(
@@ -484,7 +539,14 @@ class Controller:
                 LOGGER.info("Exported %d report file(s)", len(exported))
             except Exception as exc:  # pragma: no cover - reporting must not break stop
                 LOGGER.error("Report export failed: %s", exc)
-        LOGGER.info("Test run %s finalised (%s)", self.test_run_id, status)
+        LOGGER.info("Test run %s finalised (%s) - %s", self.test_run_id, status,
+                    self.verdict.summary_line() if self.verdict else "no verdict")
+
+    def evaluate_thresholds(self, test_run_id: str = "") -> Verdict:
+        """Score a run against the configured acceptance thresholds."""
+        return evaluate_thresholds(Repository(self.database),
+                                   test_run_id or self.test_run_id,
+                                   self.settings.thresholds)
 
     async def _persist_forums(self) -> None:
         rows = self.forum_selector.rows()
@@ -597,6 +659,8 @@ class Controller:
             snapshot["worker_status_counts"] = self.pool.status_counts()
         if self.sessions is not None:
             snapshot["sessions"] = self.sessions.snapshot()
+        if self.verdict is not None:
+            snapshot["verdict"] = self.verdict.to_dict()
         snapshot["forums"] = self.forum_selector.rows()
         snapshot["heartbeats"] = self.heartbeat.snapshot()
         if self.browser_manager is not None:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import asyncio
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
@@ -73,6 +73,8 @@ class BrowserSession:
     def __init__(self, manager: BrowserManager, options: ContextOptions, *,
                  test_run_id: str = "", worker_id: str = "", session_id: str = "",
                  capture_console: bool = True, capture_network: bool = True,
+                 capture_screenshot_on_failure: bool = True,
+                 capture_html_on_failure: bool = True,
                  debug_directory: str | Path = "data/debug",
                  screenshot_directory: str | Path = "data/screenshots") -> None:
         self.manager = manager
@@ -82,6 +84,8 @@ class BrowserSession:
         self.session_id = session_id
         self.capture_console = capture_console
         self.capture_network = capture_network
+        self.capture_screenshot_on_failure = capture_screenshot_on_failure
+        self.capture_html_on_failure = capture_html_on_failure
         self.debug_directory = Path(debug_directory)
         self.screenshot_directory = Path(screenshot_directory)
         self.diagnostics = SessionDiagnostics()
@@ -143,13 +147,13 @@ class BrowserSession:
                        extra={"worker_id": self.worker_id})
 
     def _on_request(self, request: Any) -> None:
-        self._request_started[request] = asyncio.get_event_loop().time()
+        self._request_started[request] = time.monotonic()
 
     def _on_response(self, response: "Response") -> None:
         started = self._request_started.pop(response.request, None)
         duration = 0.0
         if started is not None:
-            duration = (asyncio.get_event_loop().time() - started) * 1000.0
+            duration = (time.monotonic() - started) * 1000.0
         record = ResponseRecord(
             url=response.url[:500],
             status=response.status,
@@ -216,19 +220,21 @@ class BrowserSession:
             artefacts["url"] = self.page.url
         except Exception:  # pragma: no cover
             pass
-        try:
-            screenshot = target / f"{stamp}.png"
-            await self.page.screenshot(path=str(screenshot), full_page=False)
-            artefacts["screenshot_path"] = str(screenshot)
-        except Exception as exc:  # pragma: no cover - best effort
-            LOGGER.debug("Screenshot capture failed: %s", exc)
-        try:
-            html_path = target / f"{stamp}.html"
-            content = await self.page.content()
-            html_path.write_text(content, encoding="utf-8")
-            artefacts["html_path"] = str(html_path)
-        except Exception as exc:  # pragma: no cover - best effort
-            LOGGER.debug("HTML capture failed: %s", exc)
+        if self.capture_screenshot_on_failure:
+            try:
+                screenshot = target / f"{stamp}.png"
+                await self.page.screenshot(path=str(screenshot), full_page=False)
+                artefacts["screenshot_path"] = str(screenshot)
+            except Exception as exc:  # pragma: no cover - best effort
+                LOGGER.debug("Screenshot capture failed: %s", exc)
+        if self.capture_html_on_failure:
+            try:
+                html_path = target / f"{stamp}.html"
+                content = await self.page.content()
+                html_path.write_text(content, encoding="utf-8")
+                artefacts["html_path"] = str(html_path)
+            except Exception as exc:  # pragma: no cover - best effort
+                LOGGER.debug("HTML capture failed: %s", exc)
 
         meta = target / f"{stamp}.txt"
         try:

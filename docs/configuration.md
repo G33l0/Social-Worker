@@ -67,6 +67,22 @@ site.
 Rate-limit statuses to honour, back-off shape, the consecutive-error limit per
 worker, the error-rate abort threshold and `stop_on_rate_limit_streak`.
 
+`honour_robots_txt` (on by default) fetches the target's robots.txt during
+preflight and blocks the run if it disallows the path being tested. Turn it off
+only for a target you own where the policy is aimed at crawlers rather than your
+own test client.
+
+### thresholds
+
+Acceptance criteria evaluated when a run finishes — see
+[reporting](reporting.md#acceptance-verdict). A limit of `0` disables that check.
+
+### controller
+
+Settings for the optional HTTP control API (`api_enabled`, `host`, `port`,
+`api_token`, `redis_url`) and the heartbeat interval/timeout used to spot a dead
+regional runner.
+
 ## Editing intervals safely
 
 Minimum/maximum pairs are validated together. When changing both from code, use
@@ -90,3 +106,9 @@ selectors:
 
 Run a dry test (`python main.py --dry-run`) after any selector change: it
 reports exactly what was detected without submitting anything.
+
+## Retired keys
+
+Settings removed in a newer version are ignored with a warning rather than
+failing the load, so an existing configuration keeps working after an upgrade.
+Re-save from any configuration menu to tidy the file.

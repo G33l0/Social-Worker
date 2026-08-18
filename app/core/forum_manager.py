@@ -67,7 +67,12 @@ class ForumSelector:
         raw = {key.lower(): value for key, value in self.config.weights.items()
                if key.lower() in {name.lower() for name in available}}
         if not raw:
+            # Nothing configured for these forums: treat them as equally likely.
             return {key: 1.0 / len(available) for key in available} if available else {}
+        if sum(raw.values()) <= 0:
+            # Every candidate is weighted zero. That is an instruction not to
+            # use them, not a reason to crash - the caller sees no selection.
+            return {key: 0.0 for key in available}
         normalised = validate_weights(raw)
         return {key: normalised.get(key.lower(), 0.0) for key in available}
 
@@ -112,7 +117,9 @@ class ForumSelector:
             weights = self._normalised_weights({forum.key for forum in pool})
             values = [max(0.0, weights.get(forum.key, 0.0)) for forum in pool]
             if sum(values) <= 0:
-                return self._rng.choice(pool)
+                LOGGER.info("Every available forum is weighted zero (%s); no forum "
+                            "selected", ", ".join(forum.key for forum in pool))
+                return None
             return self._rng.choices(pool, weights=values, k=1)[0]
 
         return self._rng.choice(pool)

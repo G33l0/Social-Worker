@@ -163,6 +163,29 @@ class LocationManager:
         """Distribute *global_limit* slots across the enabled locations."""
         return allocate_workers(self.enabled(), global_limit)
 
+    def apply_default_ceiling(self, default_ceiling: int) -> int:
+        """Give locations without an explicit ceiling the configured default.
+
+        Returns how many locations were adjusted.  Called before a run so
+        ``concurrency.default_max_workers_per_location`` actually governs the
+        locations that did not set a ceiling of their own.
+        """
+        if default_ceiling < 1:
+            return 0
+        adjusted = 0
+        for location in self.all():
+            if location.ceiling_is_explicit:
+                continue
+            if location.max_concurrent_workers != default_ceiling:
+                updated = self.update(location.key,
+                                      max_concurrent_workers=default_ceiling)
+                object.__setattr__(updated, "_ceiling_explicit", False)
+                adjusted += 1
+        if adjusted:
+            LOGGER.info("Applied the default per-location ceiling (%d) to %d location(s)",
+                        default_ceiling, adjusted)
+        return adjusted
+
     def concurrency_controller(self, global_limit: int, *,
                                per_worker_limit: int = 1) -> ConcurrencyController:
         """Build a controller pre-loaded with every location ceiling."""
