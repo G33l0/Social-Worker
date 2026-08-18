@@ -17,6 +17,25 @@ database do when 40 posts land in a minute?*
 > `authorized_test_mode` is enabled, and a `production` target additionally
 > requires a recorded authorization reference.
 
+## What it looks like
+
+The live monitor during an 8-worker run across three locations:
+
+![Live monitor](docs/screenshots/02-live-monitor.png)
+
+The generated HTML report — acceptance verdict, charts and tables, in light and
+dark:
+
+![HTML report](docs/screenshots/06-html-report.png)
+
+A dry run reports what it found without submitting anything, and two runs can be
+compared to catch a regression:
+
+![Dry run](docs/screenshots/03-dry-run.png)
+![Run comparison](docs/screenshots/05-run-comparison.png)
+
+More in [docs/screenshots](docs/screenshots/).
+
 ---
 
 ## Table of contents
@@ -32,8 +51,10 @@ database do when 40 posts land in a minute?*
 9. [Running a load test](#8-running-a-load-test)
 10. [Reporting](#9-reporting)
 11. [Troubleshooting](#10-troubleshooting)
-12. [Architecture](#architecture)
-13. [Project layout](#project-layout)
+12. [Acceptance thresholds and regression detection](#acceptance-thresholds-and-regression-detection)
+13. [Control API](#control-api)
+14. [Architecture](#architecture)
+15. [Project layout](#project-layout)
 
 ---
 
@@ -567,6 +588,84 @@ warning and error with its context.
 
 ---
 
+## Acceptance thresholds and regression detection
+
+A load test that only reports numbers leaves you to eyeball whether the run was
+acceptable. Social Worker scores every finished run against the acceptance
+criteria in `config/settings.yaml`:
+
+```yaml
+thresholds:
+  enabled: true
+  max_error_rate: 0.02          # 2% of actions
+  max_p95_response_ms: 2000
+  max_p99_response_ms: 5000
+  max_rate_limit_events: 0
+  max_failed_sessions: 0
+  min_completed_sessions: 0     # 0 disables a check
+```
+
+The verdict appears on the live monitor, in the run summary, on the HTML report
+and over the API:
+
+```
+$ python main.py --verdict TEST-2026-08-18-0003
+PASS  error_rate              observed=0.0         limit=0.02 fraction
+PASS  p95_response_ms         observed=287.23      limit=2000.0 ms
+PASS  p99_response_ms         observed=288.0       limit=5000.0 ms
+PASS  rate_limit_events       observed=0.0         limit=0.0 events
+PASS  failed_sessions         observed=0.0         limit=0.0 sessions
+
+PASS - all 5 acceptance check(s) met.
+```
+
+Two runs can be compared to catch a regression between releases. The command
+exits non-zero when the candidate is worse than the baseline beyond the
+tolerance, so it drops straight into a pipeline:
+
+```
+$ python main.py --compare TEST-2026-08-18-0001 TEST-2026-08-18-0003
+METRIC                      BASELINE   CANDIDATE    CHANGE  VERDICT
+avg_response_ms               146.95      357.09   +143.0%  REGRESSED
+p95_response_ms                81.67      287.23   +251.7%  REGRESSED
+error_rate                       0.0         0.0     +0.0%  UNCHANGED
+throughput_per_minute         467.68      424.01     -9.3%  UNCHANGED
+
+REGRESSED against TEST-2026-08-18-0001: avg_response_ms, p95_response_ms (tolerance 10%).
+```
+
+Both are also available from menu option 18.
+
+---
+
+## Control API
+
+The console drives one controller on one machine. The optional HTTP API exposes
+the same controls, so a run can be started from CI, watched from a dashboard, or
+driven across machines — and so regional worker agents can register and report
+heartbeats to a central controller.
+
+```bash
+python main.py --serve-api          # honours controller.host / port / api_token
+```
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/health` | liveness (unauthenticated) |
+| GET | `/status` | the same snapshot the dashboard renders |
+| GET | `/verdict` | acceptance verdict for a run |
+| POST | `/test/start` `/test/pause` `/test/resume` `/test/stop` `/test/stop-all` | run control |
+| POST | `/locations/{key}/stop` · `/workers/{id}/stop` | targeted stop |
+| POST | `/workers/register` · `/workers/{id}/heartbeat` | regional agent registration |
+| GET | `/runs` · `/reports/{run}/{category}` · `/heartbeats` | results and fleet state |
+
+The API is **off by default**. When enabled it binds loopback, and it refuses to
+bind any other address without `controller.api_token` set; the token is checked
+in constant time, never logged, and stripped from the configuration snapshot
+stored with each run.
+
+---
+
 ## Architecture
 
 ```
@@ -606,7 +705,8 @@ pools on separate machines.
 ```
 Social-Worker/
 ├── app/
-│   ├── core/          controller, scheduler facade, worker/session/content/forum/metrics managers
+│   ├── api/           optional HTTP control API (FastAPI)
+│   ├── core/          controller, scheduler facade, managers, acceptance thresholds
 │   ├── browser/       Playwright manager, navigator, interaction, selectors, session
 │   ├── site/          base adapter + avatar/username/forum/post/reply managers
 │   ├── workers/       worker, worker pool, worker state, heartbeat
@@ -614,7 +714,7 @@ Social-Worker/
 │   ├── locations/     location model, manager, allocation and concurrency control
 │   ├── content/       importer, post/reply libraries, rotation
 │   ├── database/      engine, models, migrations, repository
-│   ├── reporting/     report manager and JSON/CSV/HTML writers
+│   ├── reporting/     report manager, run comparison, JSON/CSV/HTML writers
 │   └── utils/         config, logger, validation, time helpers, ids
 ├── cli/               console, menu, setup/worker/location/content/schedule wizards, dashboard
 ├── config/            settings, locations, workers, schedules, scenarios, selectors

@@ -79,11 +79,19 @@ class HeartbeatMonitor:
         """Remove a worker from the monitor."""
         self._beats.pop(worker_id, None)
 
+    #: Statuses that mean the worker is finished, not missing.
+    TERMINAL_STATUSES = frozenset({"COMPLETED", "STOPPED", "ERROR", "CREATED", "READY"})
+
     def stale(self) -> list[Heartbeat]:
-        """Workers whose last heartbeat is older than the timeout."""
+        """Workers that are supposed to be working but have stopped reporting.
+
+        A worker that has finished its plan is not stale, so a completed run
+        does not fill the log with false "missing worker" warnings.
+        """
         now = utc_now()
         return [beat for beat in self._beats.values()
-                if beat.age_seconds(now) > self.timeout_seconds]
+                if beat.status not in self.TERMINAL_STATUSES
+                and beat.age_seconds(now) > self.timeout_seconds]
 
     def snapshot(self) -> list[dict[str, Any]]:
         """All heartbeats as dictionaries."""

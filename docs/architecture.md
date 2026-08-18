@@ -15,7 +15,7 @@
 
 | Package | Responsibility |
 |---|---|
-| `app/core` | controller, worker/session/content/forum/metrics managers |
+| `app/core` | controller, worker/session/content/forum/metrics managers, acceptance thresholds |
 | `app/scheduler` | job queue, dispatch loop, scenarios |
 | `app/workers` | worker, worker pool, runtime state, heartbeats |
 | `app/site` | site adapters — the only code that knows the target's markup |
@@ -23,7 +23,8 @@
 | `app/locations` | location model, allocation, concurrency and rate limiting |
 | `app/content` | import, libraries, rotation |
 | `app/database` | engine, models, migrations, read-side repository |
-| `app/reporting` | report building and JSON/CSV/HTML writers |
+| `app/reporting` | report building, run comparison, JSON/CSV/HTML writers |
+| `app/api` | optional FastAPI control plane (run control + agent registration) |
 | `cli` | console, wizards, live dashboard |
 
 ## Request path
@@ -37,8 +38,9 @@
    uses the **browser** layer with selectors from configuration.
 4. Every step emits telemetry to the **metrics manager**, which buffers records
    and flushes them to the database on a background task, off the event loop.
-5. On stop, counters are persisted and the **report manager** writes the eight
-   report categories.
+5. On stop, counters are persisted, the run is scored against the acceptance
+   thresholds, and the **report manager** writes the eight report categories
+   with the verdict attached.
 
 ## The adapter contract
 
@@ -73,8 +75,10 @@ its own context, so cookies and storage never leak between simulated visitors.
 
 ## Scaling out
 
-The design is distribution-ready: workers are addressed by location, the
-controller tracks registration and heartbeats, and the switches for running
-worker pools on separate machines are `controller.api_enabled` (FastAPI control
-API), `controller.redis_url` (job/heartbeat transport) and a PostgreSQL
-`database.url` shared by every node.
+The design is distribution-ready and the control plane is implemented:
+`python main.py --serve-api` exposes run control (`/test/start`, `/test/pause`,
+`/test/stop-all`, `/locations/{key}/stop`, `/workers/{id}/stop`), results
+(`/status`, `/verdict`, `/runs`, `/reports/...`) and agent lifecycle
+(`/workers/register`, `/workers/{id}/heartbeat`). Point every node at one
+PostgreSQL `database.url` and the controller sees the whole fleet. The API binds
+loopback by default and refuses any other address without an API token.

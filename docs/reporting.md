@@ -25,6 +25,46 @@ event, metric and error is tied to it.
 Each is written as JSON (full fidelity), CSV (one file per table) and
 self-contained HTML (no scripts, no CDN, light and dark friendly).
 
+## Acceptance verdict
+
+Every finished run is scored against `settings.thresholds`, and the verdict
+(PASS / FAIL / NOT EVALUATED) is shown on the live monitor, in the run summary,
+as a badge on the HTML report, and over the control API.
+
+```bash
+python main.py --verdict TEST-2026-08-18-0003     # exits 2 when a check failed
+```
+
+| Check | Setting |
+|---|---|
+| `error_rate` | `max_error_rate` |
+| `avg_response_ms` | `max_avg_response_ms` |
+| `p95_response_ms` / `p99_response_ms` | `max_p95_response_ms` / `max_p99_response_ms` |
+| `post_submit_p95_ms` / `reply_submit_p95_ms` | `max_post_submit_p95_ms` / `max_reply_submit_p95_ms` |
+| `rate_limit_events` | `max_rate_limit_events` |
+| `failed_sessions` | `max_failed_sessions` |
+| `completed_sessions` | `min_completed_sessions` |
+
+A limit of `0` disables that check (except the count-based ones, where 0 means
+"none tolerated").
+
+## Comparing two runs
+
+```bash
+python main.py --compare TEST-2026-08-17-0004 TEST-2026-08-18-0003 --tolerance 0.10
+```
+
+Compares response percentiles, error rate, throughput and activity counts, and
+exits non-zero when the candidate regressed beyond the tolerance. The same view
+is available from menu option 18 → *compare with another run*.
+
+## Charts
+
+The HTML index embeds four inline-SVG charts (no scripts, no CDN): average
+response time by location, activity by location, response time over the run, and
+the percentile distribution of the dominant page metric. Colours are validated
+for colour-vision deficiency and are defined for both light and dark themes.
+
 ## Metrics collected
 
 Page load, DNS lookup, connection, TLS, TTFB, response and DOM-content-loaded

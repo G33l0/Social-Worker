@@ -24,7 +24,7 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 
 LOGGER = get_logger(BROWSER_LOGGER)
 
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.1.0"
 
 
 class BrowserUnavailableError(RuntimeError):

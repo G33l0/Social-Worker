@@ -137,7 +137,8 @@ class Worker:
             proxy_url=self.location.proxy_url,
             location_key=self.location.key,
             identify_as=self.settings.website.identify_as,
-            ignore_https_errors=self.settings.browser.ignore_https_errors,
+            ignore_https_errors=(self.settings.browser.ignore_https_errors
+                                 or not self.settings.website.verify_tls),
         )
         browser_session = BrowserSession(
             self.browser_manager, options,
@@ -145,6 +146,8 @@ class Worker:
             session_id=record.session_id,
             capture_console=self.settings.browser.capture_console,
             capture_network=self.settings.browser.capture_network,
+            capture_screenshot_on_failure=self.settings.browser.screenshot_on_failure,
+            capture_html_on_failure=self.settings.browser.save_html_on_failure,
             debug_directory=self.settings.reporting.debug_directory,
             screenshot_directory=self.settings.reporting.screenshot_directory,
         )
@@ -392,7 +395,7 @@ class Worker:
 
             elif action is StepAction.BROWSE_FORUM:
                 self._set(action=WorkerAction.READING)
-                result = await adapter.browse_forum(depth=1)
+                result = await adapter.browse_forum(depth=self._browse_depth())
                 record.pages_visited += 1
                 self._record(record, result)
 
@@ -428,6 +431,39 @@ class Worker:
         self.runtime.note_success()
         self.runtime.beat()
         return True
+
+    def _category(self, kind: str) -> str | None:
+        """Content category for the next write.
+
+        The worker profile wins; otherwise one of the categories configured for
+        the behaviour is chosen, so ``posting.categories`` and
+        ``replies.categories`` actually steer content selection.
+        """
+        if kind == "post":
+            if self.profile.content_category:
+                return self.profile.content_category
+            pool = self.settings.posting.categories
+        else:
+            if self.profile.reply_category:
+                return self.profile.reply_category
+            pool = self.settings.replies.categories
+        return self._rng.choice(list(pool)) if pool else None
+
+    def _browse_depth(self) -> int:
+        """How many screens of the feed a BROWSE_FORUM step reads."""
+        session = self.settings.session
+        low = max(1, session.browse_pages_min)
+        high = max(low, session.browse_pages_max)
+        return self._rng.randint(low, high)
+
+    def _interval(self, minimum: float, maximum: float, *, randomized: bool) -> float:
+        """Pick the wait between two writes.
+
+        With ``randomized_delay`` off the operator gets deterministic pacing at
+        the upper bound, which makes a run reproducible; with it on the wait is
+        drawn from the configured range so the load profile looks organic.
+        """
+        return random_interval(minimum, maximum) if randomized else maximum
 
     def _think_time(self, step: Step) -> tuple[float, float]:
         """Think time for a THINK step.
@@ -533,8 +569,9 @@ class Worker:
             return True
 
         if record.posts_created > 0 or self.runtime.posts_created > 0:
-            wait = random_interval(self.profile.min_post_interval_seconds,
-                                   self.profile.max_post_interval_seconds)
+            wait = self._interval(self.profile.min_post_interval_seconds,
+                                  self.profile.max_post_interval_seconds,
+                                  randomized=self.settings.posting.randomized_delay)
             if wait > 0:
                 self._set(WorkerStatus.WAITING, WorkerAction.SLEEP)
                 LOGGER.info("Waiting %.0fs before the next post", wait,
@@ -545,7 +582,7 @@ class Worker:
 
         try:
             entry = self.content.next_post(self.worker_id,
-                                           category=self.profile.content_category or None)
+                                           category=self._category("post"))
         except ContentExhausted as exc:
             await self._record_failure(record, "CREATE_POST", exc, adapter=adapter)
             return True
@@ -594,8 +631,9 @@ class Worker:
                 return self._tolerate(record)
 
         if record.replies_created > 0 or self.runtime.replies_created > 0:
-            wait = random_interval(self.profile.min_reply_interval_seconds,
-                                   self.profile.max_reply_interval_seconds)
+            wait = self._interval(self.profile.min_reply_interval_seconds,
+                                  self.profile.max_reply_interval_seconds,
+                                  randomized=self.settings.replies.randomized_delay)
             if wait > 0:
                 self._set(WorkerStatus.WAITING, WorkerAction.SLEEP)
                 LOGGER.info("Waiting %.0fs before the next reply", wait,
@@ -607,7 +645,7 @@ class Worker:
 
         try:
             entry = self.content.next_reply(self.worker_id,
-                                            category=self.profile.reply_category or None)
+                                            category=self._category("reply"))
         except ContentExhausted as exc:
             await self._record_failure(record, "CREATE_REPLY", exc, adapter=adapter)
             return True

@@ -111,6 +111,9 @@ class Location(Base):
     def _defaults(self) -> "Location":
         if not self.name:
             object.__setattr__(self, "name", self.key.replace("_", " ").title())
+        explicit = "max_concurrent_workers" in self.model_fields_set
+        object.__setattr__(self, "_ceiling_explicit", explicit and
+                           self.max_concurrent_workers > 0)
         if self.max_concurrent_workers == 0:
             object.__setattr__(self, "max_concurrent_workers", max(1, self.workers))
         if self.runner == RunnerType.PROXY and not self.proxy_url:
@@ -120,6 +123,15 @@ class Location(Base):
             raise ValueError(
                 f"Location {self.key!r} uses runner 'remote' but no runner_endpoint was set")
         return self
+
+    @property
+    def ceiling_is_explicit(self) -> bool:
+        """True when the operator set ``max_concurrent_workers`` themselves.
+
+        Locations that did not are given the global default ceiling from
+        ``concurrency.default_max_workers_per_location``.
+        """
+        return bool(getattr(self, "_ceiling_explicit", False))
 
     @property
     def label(self) -> str:

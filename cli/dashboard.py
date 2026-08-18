@@ -78,9 +78,12 @@ def render(status: dict[str, Any], *, worker_rows: int = 15) -> str:
                 f"{key}: {value['active']}/{value['limit']}"
                 for key, value in sorted(per_location.items())))
     lines.append(console.rule("=", width))
+    verdict = (status.get("verdict") or {}).get("verdict")
+    if verdict:
+        lines.append(f"ACCEPTANCE: {verdict}")
     lines.append(f"Updated {utc_now().strftime('%H:%M:%S')} UTC"
                  f"   Uptime {humanize(_uptime(status))}"
-                 "   Press Ctrl+C to leave the monitor")
+                 "   Press Enter to leave the monitor")
     return "\n".join(lines)
 
 
@@ -103,18 +106,29 @@ def _uptime(status: dict[str, Any]) -> float:
 
 async def live_monitor(status_provider: Callable[[], dict[str, Any]], *,
                        interval: float = 1.0, duration: float = 0.0,
-                       clear_screen: bool = True) -> None:
-    """Refresh the dashboard until the operator interrupts it."""
+                       clear_screen: bool = True,
+                       stop_event: asyncio.Event | None = None) -> None:
+    """Refresh the dashboard until *stop_event* is set (or *duration* elapses).
+
+    The caller owns the exit condition - the console waits on Enter - so leaving
+    the monitor never tears down the run the way an interrupt would.
+    """
     elapsed = 0.0
     try:
-        while True:
+        while stop_event is None or not stop_event.is_set():
             if clear_screen:
                 console.clear()
             print(render(status_provider()))
-            await asyncio.sleep(interval)
+            if stop_event is not None:
+                try:
+                    await asyncio.wait_for(stop_event.wait(), timeout=interval)
+                    return
+                except asyncio.TimeoutError:
+                    pass
+            else:
+                await asyncio.sleep(interval)
             elapsed += interval
             if duration and elapsed >= duration:
                 return
     except (KeyboardInterrupt, asyncio.CancelledError):
-        print()
-        console.info("Left the live monitor. The test run continues.")
+        return

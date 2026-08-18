@@ -22,14 +22,14 @@ python main.py --config-dir /etc/social-worker
 | 7 | Configure Posting Behavior | intervals, quotas, probability, content mode |
 | 8 | Configure Reply Behavior | intervals, quotas, probability, target selection |
 | 9 | Configure Session Behavior | scenario, session duration, think time |
-| 10 | Configure Concurrency | global/location ceilings, rate limits, abort thresholds |
+| 10 | Configure Concurrency | global/location ceilings, rate limits, abort thresholds, acceptance criteria |
 | 11 | Test Single Worker | one worker, one session, optionally dry |
 | 12 | Run Dry Test | detect avatars/usernames/forums/posts, submit nothing |
 | 13 | Start Load Test | preflight, then ramped dispatch |
 | 14/15 | Pause / Resume | stop and restart dispatch; running sessions are unaffected |
 | 16 | Stop Load Test | graceful stop, STOP ALL, stop a location, stop a worker |
 | 17 | Live Monitoring | the dashboard; Ctrl+C returns to the menu, the run continues |
-| 18 | View Reports | render any of the eight report categories in the console |
+| 18 | View Reports | the eight report categories, the acceptance verdict, or a comparison against another run |
 | 19 | Export Results | write JSON/CSV/HTML for a run |
 | 20 | Backup | copy configuration, content and the SQLite database |
 | 21 | Exit | stops a running test if you confirm |
@@ -59,7 +59,23 @@ CONCURRENCY  global 82/100 (peak 84)
 ```
 
 The console is asynchronous: the run keeps going while a menu waits for input,
-so pause, resume, stop and monitoring all act on a live test.
+so pause, resume, stop and monitoring all act on a live test. Blocking wizards
+run on a worker thread, so opening one never stalls dispatch, metric flushing or
+heartbeats.
+
+Leave the live monitor with **Enter** — Ctrl+C would tear down the console and
+the run with it.
+
+Non-interactive entry points:
+
+```bash
+python main.py --check                     # validate config, database, content, Playwright
+python main.py --dry-run --workers 3       # detect-only run
+python main.py --headless-run --label ci   # full run, no menu
+python main.py --verdict  TEST-ID          # acceptance verdict, exit 2 on failure
+python main.py --compare  BASE CANDIDATE   # regression check, exit 2 on regression
+python main.py --serve-api                 # HTTP control API
+```
 
 ## Wizards
 

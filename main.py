@@ -27,7 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from app.utils.config import ConfigPaths, config_exists, load_settings  # noqa: E402
 from app.utils.logger import configure_logging  # noqa: E402
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 
 AUTHORIZATION_BANNER = """
 Social Worker generates automated traffic for load and behaviour testing.
@@ -140,6 +140,62 @@ async def _headless_run(paths: ConfigPaths, label: str) -> int:
         await controller.shutdown()
 
 
+def _compare(paths: ConfigPaths, baseline: str, candidate: str,
+             tolerance: float) -> int:
+    """Compare two runs; exit non-zero when the candidate regressed."""
+    from app.database.database import Database
+    from app.database.repository import Repository
+    from app.reporting.comparison import compare
+
+    settings = load_settings(paths.settings)
+    repository = Repository(Database(settings.database))
+    result = compare(repository, baseline, candidate, tolerance=tolerance)
+    header = f"{'METRIC':<24}{'BASELINE':>12}{'CANDIDATE':>12}{'CHANGE':>10}  VERDICT"
+    print(header)
+    print("-" * len(header))
+    for row in result.to_dict()["metrics"]:
+        print(f"{row['metric']:<24}{row['baseline']:>12}{row['candidate']:>12}"
+              f"{row['change']:>10}  {row['verdict']}")
+    print()
+    print(result.summary_line())
+    return 0 if result.passed else 2
+
+
+def _verdict(paths: ConfigPaths, test_run_id: str) -> int:
+    """Print a run's acceptance verdict; exit non-zero when it failed."""
+    from app.core.thresholds import evaluate
+    from app.database.database import Database
+    from app.database.repository import Repository
+
+    settings = load_settings(paths.settings)
+    repository = Repository(Database(settings.database))
+    verdict = evaluate(repository, test_run_id, settings.thresholds)
+    for check in verdict.checks:
+        row = check.to_row()
+        print(f"{row['result']:<6}{row['check']:<24}"
+              f"observed={row['observed']:<12}limit={row['limit']} {row['unit']}")
+    print()
+    print(verdict.summary_line())
+    return 0 if verdict.passed else 2
+
+
+def _serve_api(paths: ConfigPaths) -> int:
+    """Run the HTTP control API."""
+    from app.api.control_api import serve
+    from app.core.controller import Controller
+
+    settings = load_settings(paths.settings)
+    controller = Controller(settings, config_paths=paths)
+    print(AUTHORIZATION_BANNER)
+    print(f"Control API: http://{settings.controller.host}:{settings.controller.port}")
+    try:
+        serve(controller)
+    except ValueError as exc:
+        print(f"[X] {exc}")
+        return 1
+    return 0
+
+
 def main() -> int:
     """Parse arguments and dispatch."""
     parser = argparse.ArgumentParser(
@@ -157,6 +213,14 @@ def main() -> int:
     parser.add_argument("--headless-run", action="store_true",
                         help="start a load test without the interactive menu")
     parser.add_argument("--label", default="load-test", help="label for --headless-run")
+    parser.add_argument("--serve-api", action="store_true",
+                        help="run the HTTP control API instead of the console")
+    parser.add_argument("--compare", nargs=2, metavar=("BASELINE", "CANDIDATE"),
+                        help="compare two test runs and exit non-zero on regression")
+    parser.add_argument("--tolerance", type=float, default=0.10,
+                        help="regression tolerance for --compare (default 0.10)")
+    parser.add_argument("--verdict", metavar="TEST_RUN_ID", default="",
+                        help="print the acceptance verdict for a run and exit")
     parser.add_argument("--config-dir", default="config",
                         help="configuration directory (default: config)")
     arguments = parser.parse_args()
@@ -179,6 +243,13 @@ def main() -> int:
     if arguments.headless_run:
         print(AUTHORIZATION_BANNER)
         return asyncio.run(_headless_run(paths, arguments.label))
+    if arguments.compare:
+        return _compare(paths, arguments.compare[0], arguments.compare[1],
+                        arguments.tolerance)
+    if arguments.verdict:
+        return _verdict(paths, arguments.verdict)
+    if arguments.serve_api:
+        return _serve_api(paths)
 
     from cli.main import main as console_main
 
